@@ -1,0 +1,47 @@
+{
+  "name": "sifen-backend",
+  "version": "1.0.0",
+  "description": "Backend para sistema de facturación electrónica con SIFEN",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "worker": "node workers/facturaWorker.js",
+    "worker:dev": "nodemon workers/facturaWorker.js",
+    "start:all": "concurrently \"npm start\" \"npm run worker\"",
+    "dev:all": "concurrently \"npm run dev\" \"npm run worker:dev\"",
+    "crear-admin": "node crear-admin.js",
+    "postinstall": "node patch-kude.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "sifen",
+    "facturacion",
+    "electronica",
+    "paraguay",
+    "mongodb",
+    "express"
+  ],
+  "author": "Sistema de Facturación Electrónica PY",
+  "license": "MIT",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "bull": "^4.16.5",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "facturacionelectronicapy-kude": "^1.0.18",
+    "facturacionelectronicapy-qrgen": "^1.0.9",
+    "facturacionelectronicapy-setapi": "^1.0.34",
+    "facturacionelectronicapy-xmlgen": "^1.0.277",
+    "facturacionelectronicapy-xmlsign": "^1.0.28",
+    "ioredis": "^5.9.3",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^7.5.0",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

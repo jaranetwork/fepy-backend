@@ -1,0 +1,99 @@
+# Node modules
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Certificados (IMPORTANTÍSIMO - NO subir certificados reales)
+certificados/
+!certificados/.gitkeep
+
+# Output de facturas (XML, PDF)
+de_output/
+xml_output/
+
+# Archivos temporales
+tmp/
+temp/
+*.tmp
+*.temp
+
+# Redis dump (si se usa Redis local)
+dump.rdb
+appendonly.aof
+
+# MongoDB data (si se usa MongoDB local)
+data/
+mongodb/
+
+# KUDE temporal files
+*.xml.temp
+*.xml.tmp
+
+# Secret files
+*.pem
+*.p12
+*.key
+*.crt
+*.cer
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Test files (opcional, si contienen datos sensibles)
+test-queue.sh
+datos_factura.json
+
+# Scripts de migración con datos sensibles
+scripts/migrar-*.js
+
+# Database dumps
+*.dump
+*.sql
+
+# Caché
+.cache/
+.npm/
+.eslintcache
+
+# Lock files (opcional - algunos prefieren subirlos)
+# package-lock.json
+# yarn.lock
