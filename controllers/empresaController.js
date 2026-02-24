@@ -154,7 +154,11 @@ exports.crear = async (req, res) => {
 exports.actualizar = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('📝 Actualizando empresa ID:', id);
+    console.log('📦 Body recibido:', JSON.stringify(req.body, null, 2));
+    
     const {
+      ruc,
       nombreFantasia,
       razonSocial,
       configuracionSifen,
@@ -174,6 +178,36 @@ exports.actualizar = async (req, res) => {
         success: false,
         error: 'Empresa no encontrada'
       });
+    }
+
+    // Actualizar RUC si se proporciona y es diferente
+    if (ruc && ruc !== empresa.ruc) {
+      // Limpiar RUC (eliminar guiones y otros caracteres no numéricos)
+      const rucLimpio = ruc.replace(/[^0-9]/g, '');
+      
+      // Validar formato del RUC (6-12 dígitos)
+      if (rucLimpio.length < 6 || rucLimpio.length > 12) {
+        return res.status(400).json({
+          success: false,
+          error: 'RUC inválido. Debe tener entre 6-12 dígitos'
+        });
+      }
+      
+      // Verificar que el nuevo RUC no esté ya en uso por otra empresa
+      const existeOtraEmpresa = await Empresa.findOne({
+        ruc: rucLimpio,
+        _id: { $ne: id }
+      });
+      
+      if (existeOtraEmpresa) {
+        return res.status(400).json({
+          success: false,
+          error: 'El RUC ya está registrado en otra empresa'
+        });
+      }
+      
+      empresa.ruc = rucLimpio;
+      console.log('🔄 RUC actualizado:', empresa.ruc);
     }
 
     // Actualizar campos
@@ -227,19 +261,52 @@ exports.actualizar = async (req, res) => {
     if (email !== undefined) empresa.email = email;
     if (activo !== undefined) empresa.activo = activo;
 
+    console.log('💾 Datos antes de guardar:', {
+      ruc: empresa.ruc,
+      nombreFantasia: empresa.nombreFantasia,
+      razonSocial: empresa.razonSocial,
+      configuracionSifen: empresa.configuracionSifen
+    });
+
     await empresa.save();
+
+    console.log('✅ Empresa guardada exitosamente:', empresa._id);
+    console.log('📋 Datos guardados:', {
+      _id: empresa._id,
+      ruc: empresa.ruc,
+      nombreFantasia: empresa.nombreFantasia,
+      razonSocial: empresa.razonSocial,
+      configuracionSifen: empresa.configuracionSifen,
+      updatedAt: empresa.updatedAt
+    });
 
     res.json({
       success: true,
       message: 'Empresa actualizada exitosamente',
-      data: empresa
+      data: empresa,
+      debug: {
+        recibido: req.body,
+        guardado: {
+          ruc: empresa.ruc,
+          nombreFantasia: empresa.nombreFantasia,
+          razonSocial: empresa.razonSocial,
+          configuracionSifen: empresa.configuracionSifen
+        }
+      }
     });
   } catch (error) {
     console.error('❌ Error actualizando empresa:', error);
+    console.error('❌ Detalles del error:', {
+      name: error.name,
+      message: error.message,
+      errors: error.errors,
+      stack: error.stack
+    });
     res.status(500).json({
       success: false,
       error: 'Error al actualizar empresa',
-      message: error.message
+      message: error.message,
+      details: error.errors ? Object.keys(error.errors).map(k => error.errors[k].message) : null
     });
   }
 };
