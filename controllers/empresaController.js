@@ -154,44 +154,81 @@ exports.crear = async (req, res) => {
 exports.actualizar = async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
-      nombreFantasia, 
-      razonSocial, 
-      configuracionSifen, 
-      direccion, 
-      telefono, 
+    const {
+      nombreFantasia,
+      razonSocial,
+      configuracionSifen,
+      direccion,
+      telefono,
       email,
-      activo 
+      activo
     } = req.body;
-    
+
     const empresa = await Empresa.findOne({
       _id: id,
       usuarioId: req.usuario._id
     });
-    
+
     if (!empresa) {
       return res.status(404).json({
         success: false,
         error: 'Empresa no encontrada'
       });
     }
-    
+
     // Actualizar campos
     if (nombreFantasia) empresa.nombreFantasia = nombreFantasia;
     if (razonSocial) empresa.razonSocial = razonSocial;
     if (configuracionSifen) {
+      // Validar CSC si se proporciona (debe ser 32 caracteres hexadecimales)
+      if (configuracionSifen.csc) {
+        const cscLimpio = configuracionSifen.csc.trim();
+        if (!/^[0-9A-F]{32}$/i.test(cscLimpio)) {
+          return res.status(400).json({
+            success: false,
+            error: 'CSC inválido. Debe ser 32 caracteres hexadecimales'
+          });
+        }
+        configuracionSifen.csc = cscLimpio.toUpperCase();
+      }
+      // Validar timbrado si se proporciona (debe ser 8 dígitos)
+      if (configuracionSifen.timbrado) {
+        if (!/^\d{8}$/.test(configuracionSifen.timbrado)) {
+          return res.status(400).json({
+            success: false,
+            error: 'Timbrado inválido. Debe ser 8 dígitos'
+          });
+        }
+      }
+      // Validar idCSC si se proporciona (1-4 dígitos)
+      if (configuracionSifen.idCSC) {
+        if (!/^\d{1,4}$/.test(configuracionSifen.idCSC)) {
+          return res.status(400).json({
+            success: false,
+            error: 'ID CSC inválido. Debe ser 1-4 dígitos'
+          });
+        }
+      }
+      // Validar modo si se proporciona
+      if (configuracionSifen.modo && !['test', 'produccion'].includes(configuracionSifen.modo)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Modo inválido. Debe ser "test" o "produccion"'
+        });
+      }
+      // Actualizar configuración SIFEN manteniendo valores existentes
       empresa.configuracionSifen = {
         ...empresa.configuracionSifen,
         ...configuracionSifen
       };
     }
-    if (direccion) empresa.direccion = direccion;
-    if (telefono) empresa.telefono = telefono;
-    if (email) empresa.email = email;
+    if (direccion !== undefined) empresa.direccion = direccion;
+    if (telefono !== undefined) empresa.telefono = telefono;
+    if (email !== undefined) empresa.email = email;
     if (activo !== undefined) empresa.activo = activo;
-    
+
     await empresa.save();
-    
+
     res.json({
       success: true,
       message: 'Empresa actualizada exitosamente',
