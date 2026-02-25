@@ -20,6 +20,45 @@ const kude = require('facturacionelectronicapy-kude').default;
 const setApi = require('../../mock-set/setapi-mock').default;
 
 /**
+ * Normaliza datetime de ERPNext (microsegundos) a formato JavaScript (milisegundos)
+ * ERPNext envía: 2026-02-24T15:12:58.715809 (6 dígitos = microsegundos)
+ * JavaScript espera: 2026-02-24T15:12:58.715Z (3 dígitos = milisegundos)
+ * @param {string} datetimeStr - String de fecha/hora
+ * @returns {string} Fecha normalizada en formato ISO
+ */
+function normalizarDatetime(datetimeStr) {
+  if (!datetimeStr) return new Date().toISOString();
+  
+  // Si ya es un objeto Date, convertir a ISO
+  if (datetimeStr instanceof Date) {
+    return datetimeStr.toISOString();
+  }
+  
+  // Patrón para detectar datetime con microsegundos: YYYY-MM-DDTHH:MM:SS.ffffff
+  const matchMicrosegundos = datetimeStr.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\.(\d{6})(.*)$/);
+  
+  if (matchMicrosegundos) {
+    // Convertir microsegundos a milisegundos (cortar últimos 3 dígitos)
+    const [, parteBase, microsegundos, resto] = matchMicrosegundos;
+    const milisegundos = microsegundos.substring(0, 3);
+    return `${parteBase}.${milisegundos}${resto || 'Z'}`;
+  }
+  
+  // Si no tiene microsegundos, intentar parsear directamente
+  try {
+    const date = new Date(datetimeStr);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  } catch (e) {
+    console.warn(`⚠️ Fecha inválida: ${datetimeStr}`);
+  }
+  
+  // Fallback: devolver fecha actual
+  return new Date().toISOString();
+}
+
+/**
  * Procesa una factura electrónica completa
  * @param {Object} datosFactura - Datos de la factura
  * @param {String} empresaId - ID de la empresa
@@ -86,7 +125,7 @@ async function procesarFactura(datosFactura, empresaId, job = null) {
         descripcion: "Desarrollo de Software"
       }],
       timbradoNumero: timbrado,
-      timbradoFecha: datosCompletos.fecha ? new Date(datosCompletos.fecha).toISOString().split('T')[0] : "2021-10-19",
+      timbradoFecha: datosCompletos.fecha ? new Date(normalizarDatetime(datosCompletos.fecha)).toISOString().split('T')[0] : "2021-10-19",
       tipoContribuyente: 1,
       tipoRegimen: 1,
       establecimientos: [{
@@ -487,7 +526,9 @@ function generarCDC(datosFactura) {
 
   let fechaEmision;
   if (datosFactura.fecha) {
-    const f = new Date(datosFactura.fecha);
+    // Normalizar fecha de ERPNext (microsegundos → milisegundos)
+    const fechaNormalizada = normalizarDatetime(datosFactura.fecha);
+    const f = new Date(fechaNormalizada);
     fechaEmision = `${f.getFullYear()}${String(f.getMonth() + 1).padStart(2, '0')}${String(f.getDate()).padStart(2, '0')}`;
   } else {
     const now = new Date();
