@@ -40,8 +40,10 @@ datosFactura = normalizarFechasEnObjeto(datosFactura);
 ```javascript
 const { normalizarFechasEnObjeto, normalizarDatetime } = require('../utils/fechaUtils');
 
-// Al inicio de generarFactura():
+// INMEDIATAMENTE después de obtener datosFactura:
 datosFactura = normalizarFechasEnObjeto(datosFactura);
+
+// Luego, usar datosFactura.fecha ya está normalizada
 ```
 
 #### `services/procesarFacturaService.js`
@@ -49,6 +51,60 @@ datosFactura = normalizarFechasEnObjeto(datosFactura);
 const { normalizarDatetime } = require('../utils/fechaUtils');
 
 // Elimina la función local y usa la del utilitario
+```
+
+## Flujo Correcto de Procesamiento
+
+### Orden de operaciones en controllers/facturaController.js:
+
+```javascript
+exports.generarFactura = async (req, res) => {
+  try {
+    const { ruc, ...datosFactura } = req.body;  // ← 1. Recibir datos
+
+    // ← 2. NORMALIZAR INMEDIATAMENTE (CRÍTICO!)
+    datosFactura = normalizarFechasEnObjeto(datosFactura);
+
+    // ← 3. Ahora TODOS los usos de datosFactura.fecha usan la versión normalizada
+    const facturaHash = generarFacturaHash({
+      fecha: datosFactura.fecha  // ✅ Ya está normalizada
+    });
+
+    const invoice = new Invoice({
+      datosFactura: datosFactura  // ✅ Se guarda normalizado en BD
+    });
+  }
+}
+```
+
+## ¿Por qué el orden es crítico?
+
+### ❌ Orden INCORRECTO (causa el error):
+
+```javascript
+const { ruc, ...datosFactura } = req.body;
+
+// Usar datosFactura.fecha AQUÍ → TIENE MICROSEGUNDOS
+const facturaHash = generarFacturaHash({
+  fecha: datosFactura.fecha  // ❌ 2026-02-24T15:12:58.715809
+});
+
+// Normalizar DESPUÉS → DEMASIADO TARDE
+datosFactura = normalizarFechasEnObjeto(datosFactura);
+```
+
+### ✅ Orden CORRECTO:
+
+```javascript
+const { ruc, ...datosFactura } = req.body;
+
+// Normalizar PRIMERO → CRÍTICO!
+datosFactura = normalizarFechasEnObjeto(datosFactura);
+
+// Usar datosFactura.fecha AQUÍ → YA ESTÁ NORMALIZADA
+const facturaHash = generarFacturaHash({
+  fecha: datosFactura.fecha  // ✅ 2026-02-24T15:12:58.715Z
+});
 ```
 
 ## Cómo Funciona

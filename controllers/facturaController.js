@@ -45,7 +45,7 @@ exports.generarFactura = async (req, res) => {
         error: 'El RUC de la empresa es requerido'
       });
     }
-    
+
     // 2. Buscar la empresa por RUC
     const empresa = await Empresa.findOne({ ruc });
     if (!empresa) {
@@ -54,7 +54,7 @@ exports.generarFactura = async (req, res) => {
         error: `No se encontró una empresa con RUC ${ruc}`
       });
     }
-    
+
     // 3. Verificar que la empresa esté activa
     if (!empresa.activo) {
       return res.status(400).json({
@@ -62,7 +62,7 @@ exports.generarFactura = async (req, res) => {
         error: `La empresa "${empresa.nombreFantasia}" está inactiva`
       });
     }
-    
+
     // 4. Verificar certificado válido
     if (!empresa.tieneCertificadoValido()) {
       return res.status(400).json({
@@ -70,7 +70,7 @@ exports.generarFactura = async (req, res) => {
         error: `La empresa no tiene un certificado digital válido cargado`
       });
     }
-    
+
     // 5. Validar datos mínimos de la factura
     if (!datosFactura.numero || !datosFactura.cliente || !datosFactura.items) {
       return res.status(400).json({
@@ -78,12 +78,12 @@ exports.generarFactura = async (req, res) => {
         error: 'Datos de factura incompletos. Se requiere: numero, cliente, items'
       });
     }
-    
-    // 6. Generar hash para evitar duplicados
+
+    // 6. Generar hash para evitar duplicados (usando fecha normalizada)
     const facturaHash = generarFacturaHash({
       rucEmisor: ruc,
       numero: datosFactura.numero,
-      fecha: datosFactura.fecha
+      fecha: datosFactura.fecha  // ← Ahora ya está normalizada
     });
     
     // Verificar si ya existe
