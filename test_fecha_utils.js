@@ -4,7 +4,7 @@
  * Uso: node test_fecha_utils.js
  */
 
-const { normalizarDatetime, normalizarFechasEnObjeto, esFechaValida } = require('./utils/fechaUtils');
+const { normalizarDatetime, normalizarFechasEnObjeto, esFechaValida, formatoFechaSIFEN } = require('./utils/fechaUtils');
 
 console.log('===========================================');
 console.log('🧪 TEST: Normalización de Fechas ERPNext');
@@ -137,5 +137,24 @@ if (fechaNormalizada.includes('.715') && !fechaNormalizada.includes('.715809')) 
 } else {
   console.log('⚠️ Verificar la normalización de microsegundos');
 }
+
+console.log('\n===========================================\n');
+
+// Test adicional para formato SIFEN
+console.log('===========================================');
+console.log('🧪 TEST: Formato SIFEN (librería xmlgen)');
+console.log('===========================================\n');
+
+const fechaERPNext = '2026-02-24T15:12:58.715809';
+const formatoSIFEN = formatoFechaSIFEN(fechaERPNext);
+
+console.log('Fecha ERPNext:', fechaERPNext);
+console.log('Formato SIFEN:', formatoSIFEN);
+console.log('');
+console.log('Verificaciones:');
+console.log('  ✅ Sin microsegundos:', !/\.\d{6}/.test(formatoSIFEN) ? 'SÍ' : 'NO');
+console.log('  ✅ Sin Z:', !formatoSIFEN.endsWith('Z') ? 'SÍ' : 'NO');
+console.log('  ✅ Formato válido:', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(formatoSIFEN) ? 'SÍ' : 'NO');
+console.log('  ✅ Date válido:', !isNaN(new Date(formatoSIFEN).getTime()) ? 'SÍ' : 'NO');
 
 console.log('\n===========================================\n');

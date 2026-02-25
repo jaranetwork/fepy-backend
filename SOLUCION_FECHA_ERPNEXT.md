@@ -116,8 +116,22 @@ ERPNext → 2026-02-24T15:12:58.715809 → new Date() → ❌ Invalid time value
 
 ### Después (corregido):
 ```
-ERPNext → 2026-02-24T15:12:58.715809 → normalizarDatetime() → 2026-02-24T15:12:58.715Z → new Date() → ✅ Válido
+ERPNext → 2026-02-24T15:12:58.715809
+         ↓
+   normalizarDatetime() → 2026-02-24T15:12:58.715Z (para JavaScript)
+         ↓
+   formatoFechaSIFEN() → 2026-02-24T15:12:58 (para librería xmlgen)
+         ↓
+   ✅ Válido para ambos
 ```
+
+## Formatos de Fecha
+
+| Contexto | Formato | Ejemplo | Función |
+|----------|---------|---------|---------|
+| **ERPNext** | ISO con microsegundos | `2026-02-24T15:12:58.715809` | - |
+| **JavaScript/BD** | ISO con milisegundos | `2026-02-24T15:12:58.715Z` | `normalizarDatetime()` |
+| **Librería SIFEN** | ISO sin milisegundos ni Z | `2026-02-24T15:12:58` | `formatoFechaSIFEN()` |
 
 ## Campos de Fecha Normalizados
 

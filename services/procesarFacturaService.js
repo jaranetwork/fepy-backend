@@ -11,7 +11,7 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const os = require('os');
-const { normalizarDatetime } = require('../utils/fechaUtils');
+const { normalizarDatetime, formatoFechaSIFEN } = require('../utils/fechaUtils');
 
 // Librerías SIFEN
 const FacturaElectronicaPY = require('facturacionelectronicapy-xmlgen').default;
@@ -463,7 +463,8 @@ function completarDatosConEmpresa(datosFactura, empresa) {
         sujetoExcluido: false,
         responsableIVA: true
       },
-      fecha: datosCompletos.fecha || new Date().toISOString()
+      // Formato SIFEN v150: YYYY-MM-DDTHH:MM:SS (sin milisegundos ni Z)
+      fecha: formatoFechaSIFEN(datosCompletos.fecha)
     };
   }
 
