@@ -1,6 +1,7 @@
 /**
  * Ruta POST /get_einvoice
  * Encola factura para procesamiento asíncrono
+ * Requiere autenticación con API Key o JWT
  */
 
 const express = require('express');
@@ -8,6 +9,10 @@ const router = express.Router();
 const Invoice = require('../models/Invoice');
 const Empresa = require('../models/Empresa');
 const { facturaQueue } = require('../queues/facturaQueue');
+const { verificarToken } = require('../middleware/auth');
+
+// Usar middleware de autenticación en todas las rutas de este archivo
+router.use(verificarToken);
 
 // Generar hash para detectar duplicados
 function generarFacturaHash(datosFactura) {
@@ -139,6 +144,8 @@ router.post('/get_einvoice', async (req, res) => {
     // ========================================
     // RESPONDER INMEDIATAMENTE (NO BLOQUEANTE)
     // ========================================
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    
     res.status(202).json({
       success: true,
       message: 'Factura encolada para procesamiento asíncrono',
@@ -147,6 +154,11 @@ router.post('/get_einvoice', async (req, res) => {
         correlativo: correlativoCompleto,
         estado: 'encolado',
         jobId: job.id,
+        // Campos que se completarán después del procesamiento
+        cdc: null,  // Se genera cuando SET aprueba la factura
+        // URLs de descarga (disponibles cuando se generen los archivos)
+        xmlLink: `${baseUrl}/api/invoices/${invoice._id}/download-xml`,
+        kudeLink: `${baseUrl}/api/invoices/${invoice._id}/download-pdf`,
         urls: {
           estado: `/api/factura/estado/${invoice._id}`,
           consulta: `/api/invoices/${invoice._id}`

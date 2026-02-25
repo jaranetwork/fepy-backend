@@ -46,14 +46,14 @@ const { verificarToken, verificarAdmin } = require('./middleware/auth');
 // Rutas de empresas
 const empresaRoutes = require('./routes/empresas');
 const facturarRoutes = require('./routes/facturar');
-const getEinvoiceRoute = require('./routes/get_einvoice');
+// const getEinvoiceRoute = require('./routes/get_einvoice');  // ← LEGACY: Usar /api/facturar/crear
 
 // Usar rutas
 app.use('/api/stats', statsRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/empresas', empresaRoutes);
 app.use('/api/facturar', facturarRoutes);
-app.use(getEinvoiceRoute);  // POST /get_einvoice
+// app.use(getEinvoiceRoute);  // ← LEGACY: Deshabilitado, usar /api/facturar/crear
 
 // Rutas de autenticación (públicas)
 app.post('/api/auth/login', authController.login);

@@ -47,9 +47,36 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Factura no encontrada' });
     }
 
-    res.json(invoice);
+    // Construir URLs de descarga
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const xmlLink = invoice.xmlPath ? `${baseUrl}/api/invoices/${invoice._id}/download-xml` : null;
+    const kudeLink = invoice.kudePath ? `${baseUrl}/api/invoices/${invoice._id}/download-pdf` : null;
+
+    res.json({
+      success: true,
+      data: {
+        facturaId: invoice._id,
+        correlativo: invoice.correlativo,
+        cdc: invoice.cdc || null,
+        estado: invoice.estadoSifen,
+        xmlLink: xmlLink,
+        kudeLink: kudeLink,
+        cliente: invoice.cliente,
+        total: invoice.total,
+        fechaCreacion: invoice.fechaCreacion,
+        fechaEnvio: invoice.fechaEnvio,
+        fechaProceso: invoice.fechaProceso,
+        codigoRetorno: invoice.codigoRetorno,
+        mensajeRetorno: invoice.mensajeRetorno,
+        digestValue: invoice.digestValue,
+        qrCode: invoice.qrCode
+      }
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
   }
 });
 
