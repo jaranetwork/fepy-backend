@@ -109,20 +109,39 @@ const facturaHash = generarFacturaHash({
 
 ## Cómo Funciona
 
-### Antes (con error):
-```
-ERPNext → 2026-02-24T15:12:58.715809 → new Date() → ❌ Invalid time value
-```
+### Flujo Completo (3 pasos):
 
-### Después (corregido):
 ```
-ERPNext → 2026-02-24T15:12:58.715809
+ERPNext → 2026-02-24T15:12:58.715809 (microsegundos)
          ↓
-   normalizarDatetime() → 2026-02-24T15:12:58.715Z (para JavaScript)
+   [1] normalizarFechasEnObjeto()
          ↓
-   formatoFechaSIFEN() → 2026-02-24T15:12:58 (para librería xmlgen)
+   2026-02-24T15:12:58.715Z (para JavaScript/BD)
+         ↓
+   [2] formatoFechaSIFEN() → para un campo específico
+   [3] convertirFechasASIFEN() → para objeto completo
+         ↓
+   2026-02-24T15:12:58 (para librería xmlgen)
          ↓
    ✅ Válido para ambos
+```
+
+### ¿Por qué 3 pasos?
+
+| Paso | Función | Formato Resultado | Para qué |
+|------|---------|-------------------|----------|
+| **1** | `normalizarFechasEnObjeto()` | `2026-02-24T15:12:58.715Z` | BD y JavaScript |
+| **2** | `formatoFechaSIFEN()` | `2026-02-24T15:12:58` | Un campo específico |
+| **3** | `convertirFechasASIFEN()` | Todo el objeto | Librería xmlgen |
+
+### Punto Crítico en procesarFacturaService.js:
+
+```javascript
+// ANTES de llamar a xmlgen (línea ~118)
+console.log('📅 Convirtiendo fechas a formato SIFEN para xmlgen...');
+datosCompletos = convertirFechasASIFEN(datosCompletos);
+
+const xmlGenerado = await FacturaElectronicaPY.generateXMLDE(params, datosCompletos, {});
 ```
 
 ## Formatos de Fecha

@@ -99,6 +99,34 @@ function formatoFechaSIFEN(fecha) {
 }
 
 /**
+ * Convierte todas las fechas en un objeto a formato SIFEN para librería xmlgen
+ * @param {Object} obj - Objeto a procesar
+ * @returns {Object} Objeto con fechas en formato SIFEN
+ */
+function convertirFechasASIFEN(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+
+  const camposFecha = ['fecha', 'fecha_nacimiento', 'fecha_emision', 'fecha_vencimiento', 'created', 'modified'];
+
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      const value = obj[key];
+
+      // Si es un campo de fecha conocido
+      if (camposFecha.includes(key) && (typeof value === 'string' || typeof value === 'number' || value instanceof Date)) {
+        obj[key] = formatoFechaSIFEN(value);
+      }
+      // Si es un objeto o array, procesar recursivamente
+      else if (value && typeof value === 'object') {
+        convertirFechasASIFEN(value);
+      }
+    }
+  }
+
+  return obj;
+}
+
+/**
  * Valida si una fecha es válida
  * @param {string|Date} fecha - Fecha a validar
  * @returns {boolean} True si es válida
@@ -118,5 +146,6 @@ module.exports = {
   normalizarDatetime,
   normalizarFechasEnObjeto,
   formatoFechaSIFEN,
+  convertirFechasASIFEN,
   esFechaValida
 };

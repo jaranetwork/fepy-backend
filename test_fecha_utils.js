@@ -4,7 +4,7 @@
  * Uso: node test_fecha_utils.js
  */
 
-const { normalizarDatetime, normalizarFechasEnObjeto, esFechaValida, formatoFechaSIFEN } = require('./utils/fechaUtils');
+const { normalizarDatetime, normalizarFechasEnObjeto, esFechaValida, formatoFechaSIFEN, convertirFechasASIFEN } = require('./utils/fechaUtils');
 
 console.log('===========================================');
 console.log('🧪 TEST: Normalización de Fechas ERPNext');
@@ -156,5 +156,39 @@ console.log('  ✅ Sin microsegundos:', !/\.\d{6}/.test(formatoSIFEN) ? 'SÍ' : 
 console.log('  ✅ Sin Z:', !formatoSIFEN.endsWith('Z') ? 'SÍ' : 'NO');
 console.log('  ✅ Formato válido:', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(formatoSIFEN) ? 'SÍ' : 'NO');
 console.log('  ✅ Date válido:', !isNaN(new Date(formatoSIFEN).getTime()) ? 'SÍ' : 'NO');
+
+console.log('\n===========================================\n');
+
+// Test para convertirFechasASIFEN
+console.log('===========================================');
+console.log('🧪 TEST: convertirFechasASIFEN (objeto completo)');
+console.log('===========================================\n');
+
+const datosCompletos = {
+  fecha: '2025-01-17T17:25:26.123Z',
+  ruc: '80012345-1',
+  numero: '0000060',
+  cliente: {
+    nombre: 'Test S.A.',
+    fecha_nacimiento: '1990-05-15T00:00:00.000Z'
+  },
+  items: [{ descripcion: 'Producto 1' }]
+};
+
+console.log('Objeto original:');
+console.log('  fecha:', datosCompletos.fecha);
+console.log('  cliente.fecha_nacimiento:', datosCompletos.cliente.fecha_nacimiento);
+
+const datosConvertidos = convertirFechasASIFEN({ ...datosCompletos, cliente: { ...datosCompletos.cliente } });
+
+console.log('\nObjeto después de convertirFechasASIFEN:');
+console.log('  fecha:', datosConvertidos.fecha);
+console.log('  cliente.fecha_nacimiento:', datosConvertidos.cliente.fecha_nacimiento);
+
+console.log('\nVerificaciones:');
+console.log('  ✅ fecha sin Z:', !datosConvertidos.fecha.endsWith('Z') ? 'SÍ' : 'NO');
+console.log('  ✅ fecha sin milisegundos:', !/\.\d{3}/.test(datosConvertidos.fecha) ? 'SÍ' : 'NO');
+console.log('  ✅ fecha_nacimiento sin Z:', !datosConvertidos.cliente.fecha_nacimiento.endsWith('Z') ? 'SÍ' : 'NO');
+console.log('  ✅ fecha formato SIFEN:', /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(datosConvertidos.fecha) ? 'SÍ' : 'NO');
 
 console.log('\n===========================================\n');
