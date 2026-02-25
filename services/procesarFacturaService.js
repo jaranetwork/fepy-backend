@@ -112,14 +112,14 @@ async function procesarFactura(datosFactura, empresaId, job = null) {
     // 5. Generar XML
     // ========================================
     console.log('📝 Generando XML...');
-    
+
     // CRÍTICO: Convertir TODAS las fechas a formato SIFEN antes de pasar a xmlgen
     // La librería facturacionelectronicapy-xmlgen NO acepta fechas con 'Z' o milisegundos
     console.log('📅 Convirtiendo fechas a formato SIFEN para xmlgen...');
     console.log('   fecha antes:', datosCompletos.fecha);
-    datosCompletos = convertirFechasASIFEN(datosCompletos);
+    convertirFechasASIFEN(datosCompletos);  // ← Modifica el objeto en su lugar (sin reasignar)
     console.log('   fecha después:', datosCompletos.fecha);
-    
+
     const xmlGenerado = await FacturaElectronicaPY.generateXMLDE(params, datosCompletos, {});
     await reportarProgreso(35);
 
