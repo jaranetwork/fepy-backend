@@ -15,6 +15,7 @@ const setApi = require('../../mock-set/setapi-mock').default;
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { normalizarFechasEnObjeto, normalizarDatetime } = require('../utils/fechaUtils');
 
 /**
  * Generar factura simplificada
@@ -26,7 +27,17 @@ const crypto = require('crypto');
 exports.generarFactura = async (req, res) => {
   try {
     const { ruc, ...datosFactura } = req.body;
-    
+
+    // ========================================
+    // NORMALIZAR FECHAS DE ERPNext
+    // ========================================
+    // ERPNext envía fechas con microsegundos (ej: 2026-02-24T15:12:58.715809)
+    // JavaScript espera milisegundos (ej: 2026-02-24T15:12:58.715Z)
+    console.log('📅 Normalizando fechas de ERPNext...');
+    console.log('  Fecha original:', datosFactura.fecha);
+    datosFactura = normalizarFechasEnObjeto(datosFactura);
+    console.log('  Fecha normalizada:', datosFactura.fecha);
+
     // 1. Validar que se reciba el RUC
     if (!ruc) {
       return res.status(400).json({
@@ -279,7 +290,9 @@ exports.generarFactura = async (req, res) => {
  * Generar hash único para factura
  */
 function generarFacturaHash(datos) {
-  const cadena = `${datos.rucEmisor}|${datos.numero}|${datos.fecha || new Date().toISOString()}`;
+  // Normalizar fecha para evitar errores con microsegundos de ERPNext
+  const fecha = normalizarDatetime(datos.fecha);
+  const cadena = `${datos.rucEmisor}|${datos.numero}|${fecha}`;
   return crypto.createHash('sha256').update(cadena).digest('hex');
 }
 

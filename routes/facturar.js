@@ -9,6 +9,7 @@ const Invoice = require('../models/Invoice');
 const Empresa = require('../models/Empresa');
 const { facturaQueue } = require('../queues/facturaQueue');
 const { verificarToken } = require('../middleware/auth');
+const { normalizarFechasEnObjeto, normalizarDatetime } = require('../utils/fechaUtils');
 
 // Todas las rutas requieren autenticación
 router.use(verificarToken);
@@ -18,7 +19,8 @@ function generarFacturaHash(datosFactura) {
   const crypto = require('crypto');
   const ruc = datosFactura.ruc?.replace(/[^0-9]/g, '') || '';
   const numero = datosFactura.numero || '';
-  const fecha = datosFactura.fecha || new Date().toISOString();
+  // Normalizar fecha para evitar errores con microsegundos de ERPNext
+  const fecha = normalizarDatetime(datosFactura.fecha);
   const cadena = `${ruc}|${numero}|${fecha}`;
   return crypto.createHash('sha256').update(cadena).digest('hex');
 }
@@ -40,6 +42,16 @@ function generarFacturaHash(datosFactura) {
 router.post('/crear', async (req, res) => {
   try {
     let datosFactura = req.body;
+
+    // ========================================
+    // NORMALIZAR FECHAS DE ERPNext
+    // ========================================
+    // ERPNext envía fechas con microsegundos (ej: 2026-02-24T15:12:58.715809)
+    // JavaScript espera milisegundos (ej: 2026-02-24T15:12:58.715Z)
+    console.log('📅 Normalizando fechas de ERPNext...');
+    console.log('  Fecha original:', datosFactura.fecha);
+    datosFactura = normalizarFechasEnObjeto(datosFactura);
+    console.log('  Fecha normalizada:', datosFactura.fecha);
 
     // ========================================
     // BUSCAR EMPRESA POR RUC
