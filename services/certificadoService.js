@@ -41,6 +41,13 @@ function obtenerRutaCertificado(ruc) {
  * @returns {string} Ruta donde se guardó el archivo
  */
 function guardarCertificado(ruc, buffer) {
+  // Crear directorio si no existe
+  const carpeta = path.join(CERTIFICADOS_BASE_PATH, ruc);
+  if (!fs.existsSync(carpeta)) {
+    fs.mkdirSync(carpeta, { recursive: true });
+    console.log(`📁 Carpeta creada para RUC ${ruc}: ${carpeta}`);
+  }
+  
   const ruta = obtenerRutaCertificado(ruc);
   fs.writeFileSync(ruta, buffer);
   console.log(`✅ Certificado guardado para RUC ${ruc}: ${ruta}`);
