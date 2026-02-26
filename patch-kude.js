@@ -44,17 +44,36 @@ try {
   } else {
     let content = fs.readFileSync(kudeIndexPath, 'utf8');
 
-    if (content.includes(kudeOriginalContent)) {
-      content = content.replace(kudeOriginalContent, kudePatchedContent);
-      fs.writeFileSync(kudeIndexPath, content, 'utf8');
-      console.log('✅ Parche aplicado exitosamente a facturacionelectronicapy-kude');
-      console.log('   Archivo:', kudeIndexPath);
-      console.log('   Parámetros: java8Path, xmlSigned, srcJasper, destFolder, jsonParam');
-    } else if (content.includes('srcJasper, destFolder, jsonParam')) {
+    // Verificar si ya está parcheado (tiene los 5 parámetros)
+    if (content.includes('srcJasper, destFolder, jsonParam')) {
       console.log('✓ El parche de KUDE ya está aplicado');
     } else {
-      console.warn('⚠️ Advertencia: El contenido del archivo KUDE no coincide con lo esperado');
-      console.warn('   Es posible que la librería haya cambiado su estructura');
+      // Intentar parche con el contenido original conocido
+      if (content.includes(kudeOriginalContent)) {
+        content = content.replace(kudeOriginalContent, kudePatchedContent);
+        fs.writeFileSync(kudeIndexPath, content, 'utf8');
+        console.log('✅ Parche aplicado exitosamente a facturacionelectronicapy-kude');
+        console.log('   Archivo:', kudeIndexPath);
+        console.log('   Parámetros: java8Path, xmlSigned, srcJasper, destFolder, jsonParam');
+      } else {
+        // Si no coincide el contenido exacto, intentar con regex más flexible
+        // Busca cualquier versión de generateKUDE con 4 parámetros y la reemplaza con 5
+        const flexiblePattern = /this\.generateKUDE\s*=\s*\([^)]+\)\s*=>\s*\{\s*return\s+KUDEGen_1\.default\.generateKUDE\([^)]+\)/;
+        
+        if (flexiblePattern.test(content)) {
+          const flexibleReplacement = `this.generateKUDE = (java8Path, xmlSigned, srcJasper, destFolder, jsonParam) => {
+            return KUDEGen_1.default.generateKUDE(java8Path, xmlSigned, srcJasper, destFolder, jsonParam)`;
+          
+          content = content.replace(flexiblePattern, flexibleReplacement);
+          fs.writeFileSync(kudeIndexPath, content, 'utf8');
+          console.log('✅ Parche aplicado (modo flexible) a facturacionelectronicapy-kude');
+          console.log('   Archivo:', kudeIndexPath);
+        } else {
+          console.warn('⚠️ Advertencia: El contenido del archivo KUDE no coincide con lo esperado');
+          console.warn('   Es posible que la librería haya cambiado su estructura');
+          console.warn('   Verificar archivo:', kudeIndexPath);
+        }
+      }
     }
   }
 } catch (error) {
