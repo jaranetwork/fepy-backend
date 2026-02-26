@@ -59,6 +59,8 @@ router.get('/:id', async (req, res) => {
         correlativo: invoice.correlativo,
         cdc: invoice.cdc || null,
         estado: invoice.estadoSifen,
+        xmlPath: invoice.xmlPath,
+        kudePath: invoice.kudePath,
         xmlLink: xmlLink,
         kudeLink: kudeLink,
         cliente: invoice.cliente,
@@ -69,7 +71,8 @@ router.get('/:id', async (req, res) => {
         codigoRetorno: invoice.codigoRetorno,
         mensajeRetorno: invoice.mensajeRetorno,
         digestValue: invoice.digestValue,
-        qrCode: invoice.qrCode
+        qrCode: invoice.qrCode,
+        datosFactura: invoice.datosFactura || null
       }
     });
   } catch (error) {
@@ -263,8 +266,8 @@ router.get('/:id/download-xml', async (req, res) => {
     }
 
     // Construir la ruta completa al archivo XML
-    const xmlPath = path.join(__dirname, '../../de_output', invoice.xmlPath);
-    console.log(`📂 Buscando XML en: ${xmlPath}`);
+    const xmlPath = path.join(__dirname, '../de_output', invoice.xmlPath);
+    console.log(`📂 Buscando documento XML en: ${xmlPath}`);
 
     // Verificar que el archivo existe
     if (!fs.existsSync(xmlPath)) {
@@ -318,10 +321,10 @@ router.get('/:id/download-pdf', async (req, res) => {
     
     // Si kudePath es relativa, convertir a absoluta
     if (!path.isAbsolute(pdfPath)) {
-      pdfPath = path.join(__dirname, '../../xml_output', pdfPath);
+      pdfPath = path.join(__dirname, '../de_output', pdfPath);
     }
     
-    console.log(`📂 Buscando PDF en: ${pdfPath}`);
+    console.log(`📂 Buscando documento PDF en: ${pdfPath}`);
 
     // Verificar que el archivo existe
     if (!fs.existsSync(pdfPath)) {

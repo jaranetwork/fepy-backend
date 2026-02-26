@@ -134,7 +134,8 @@ router.post('/crear', async (req, res) => {
     // ========================================
     // CREAR REGISTRO EN BD (ESTADO: ENCOLADO)
     // ========================================
-    const correlativoCompleto = `${datosFactura.establecimiento || '001'}${datosFactura.punto || '001'}${String(datosFactura.numero || '0000001').padStart(7, '0')}`;
+    // Formato SIFEN: 001-001-0000003 (establecimiento-punto-numero)
+    const correlativoCompleto = `${String(datosFactura.establecimiento || '001').padStart(3, '0')}-${String(datosFactura.punto || '001').padStart(3, '0')}-${String(datosFactura.numero || '0000001').padStart(7, '0')}`;
 
     const totalFactura = datosFactura.total ||
                          datosFactura.totalPago ||
@@ -143,8 +144,15 @@ router.post('/crear', async (req, res) => {
     const invoice = new Invoice({
       correlativo: correlativoCompleto,
       cliente: {
-        ...datosFactura.cliente,
-        nombre: datosFactura.cliente?.razonSocial || datosFactura.cliente?.nombre || 'N/A'
+        ruc: datosFactura.cliente?.ruc || datosFactura.cliente?.documentoNumero || 'N/A',
+        nombre: datosFactura.cliente?.razonSocial || datosFactura.cliente?.nombreFantasia || datosFactura.cliente?.nombre || 'N/A',
+        razonSocial: datosFactura.cliente?.razonSocial,
+        nombreFantasia: datosFactura.cliente?.nombreFantasia,
+        direccion: datosFactura.cliente?.direccion,
+        telefono: datosFactura.cliente?.telefono,
+        email: datosFactura.cliente?.email,
+        documentoTipo: datosFactura.cliente?.documentoTipo,
+        documentoNumero: datosFactura.cliente?.documentoNumero
       },
       total: totalFactura,
       fechaCreacion: new Date(),

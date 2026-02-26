@@ -160,7 +160,7 @@ async function procesarFactura(datosFactura, empresaId, job = null) {
     }
 
     const correlativo = datosCompletos.encabezado?.idDoc?.correlativo ||
-                       `${establecimiento}001${String(datosCompletos.numero || '0000001').padStart(7, '0')}`;
+                       `${establecimiento}-001-${String(datosCompletos.numero || '0000001').padStart(7, '0')}`;
 
     // Extraer datos del XML para el nombre del archivo
     let tipoDocumentoDescripcion = 'Factura';
@@ -295,7 +295,8 @@ async function generarKUDE(xmlPath, cdc, correlativo, fechaCreacion, datosFactur
     const fs = require('fs');
     const path = require('path');
     const java8Path = process.env.JAVA8_HOME || process.env.JAVA_HOME || 'java';
-    const srcJasper = '/home/ruben/sifen_einvoice/proyecto-sifen/fepy-backend/node_modules/facturacionelectronicapy-kude/dist/DE/';
+    const srcJasper =  path.join(__dirname, `../node_modules/facturacionelectronicapy-kude/dist/DE/`);   
+
     const destFolder = path.join(__dirname, `../de_output`,
                                   fechaCreacion.getFullYear().toString(),
                                   String(fechaCreacion.getMonth() + 1).padStart(2, '0'), '/');
@@ -341,80 +342,80 @@ async function generarKUDE(xmlPath, cdc, correlativo, fechaCreacion, datosFactur
     }
 
     // ========================================
-    // BUSCAR EL PDF REAL GENERADO POR EL JAR
-    // El JAR usa: {dDesTiDE}_{timbrado}-{establecimiento}-{punto}-{numero}[-{serie}].pdf
+    // BUSCAR EL PDF GENERADO POR EL JAR
     // ========================================
-
-    // Extraer timbrado, establecimiento, punto y número del XML
-    let pdfTimbrado = '12345678';
-    let pdfEstablecimiento = '001';
-    let pdfPunto = '001';
-    let pdfNumero = '0000001';
-    let pdfTipoDocumento = 'Factura electrónica';  // Default exacto como el JAR
-
+    // El JAR genera: {TipoDocumento}_{timbrado}-{establecimiento}-{punto}-{numero}[-{serie}].pdf
+    // Ejemplo: Factura electrónica_12345678-001-001-0000001.pdf
+    
+    // Extraer timbrado del XML
+    let timbrado = '12345678';
     try {
       const xml2js = require('xml2js');
       const xmlContent = fs.readFileSync(xmlPath, 'utf-8');
       const xmlObj = await xml2js.parseStringPromise(xmlContent);
       
-      // Extraer tipo de documento EXACTO como el JAR (con UTF-8)
-      if (xmlObj?.rDE?.DE?.[0]?.gTimb?.[0]?.dDesTiDE?.[0]) {
-        pdfTipoDocumento = xmlObj.rDE.DE[0].gTimb[0].dDesTiDE[0];
-        // NO reemplazar caracteres - mantener UTF-8 exacto
-      }
-      
-      // Extraer timbrado
       if (xmlObj?.rDE?.DE?.[0]?.gTimb?.[0]?.dNumTim?.[0]) {
-        pdfTimbrado = xmlObj.rDE.DE[0].gTimb[0].dNumTim[0];
-      }
-      
-      // Extraer establecimiento, punto y número
-      if (xmlObj?.rDE?.DE?.[0]?.gInfDoc?.[0]) {
-        const gInfDoc = xmlObj.rDE.DE[0].gInfDoc[0];
-        if (gInfDoc.gEst?.[0]?.dEst?.[0]) pdfEstablecimiento = gInfDoc.gEst[0].dEst[0];
-        if (gInfDoc.gPunExp?.[0]?.dPunExp?.[0]) pdfPunto = gInfDoc.gPunExp[0].dPunExp[0];
-        if (gInfDoc.gNumDoc?.[0]?.dNumDoc?.[0]) pdfNumero = gInfDoc.gNumDoc[0].dNumDoc[0];
+        timbrado = xmlObj.rDE.DE[0].gTimb[0].dNumTim[0];
       }
     } catch (err) {
-      console.warn('⚠️ No se pudo extraer datos del XML para el PDF:', err.message);
+      console.warn('⚠️ No se pudo extraer timbrado del XML:', err.message);
     }
+    
+    // El correlativo puede venir en dos formatos:
+    // 1. Con guiones: 001-001-0000001
+    // 2. Sin guiones: 0010010000001
+    let establecimientoStr, puntoStr, numeroFactura;
+    
+    if (correlativo.includes('-')) {
+      // Formato con guiones: 001-001-0000001
+      const partes = correlativo.split('-');
+      establecimientoStr = partes[0];
+      puntoStr = partes[1];
+      numeroFactura = partes[2];
+    } else {
+      // Formato sin guiones: 0010010000001
+      establecimientoStr = correlativo.substring(0, 3);
+      puntoStr = correlativo.substring(3, 6);
+      numeroFactura = correlativo.substring(6);
+    }
+    
+    // Construir nombre base del PDF
+    // Nota: El JAR usa encoding Windows-1252 para caracteres especiales
+    // "ó" se convierte en los bytes C3 B3 que se muestran como "├│" en UTF-8
+    const pdfFileNameBase = `Factura electrónica_${timbrado}-${establecimientoStr}-${puntoStr}-${numeroFactura}`;
+    
+    // Versión alternativa con el encoding que usa el JAR (UTF-8 mal interpretado)
+    // "ó" (U+00F3) en UTF-8 es C3 B3, que en Latin-1/Windows-1252 se ve como "Ã³"
+    // Pero el JAR parece usar box-drawing characters: "│" (U+2502)
+    const pdfFileNameBaseAlt = `Factura electr\u251C\u2502nica_${timbrado}-${establecimientoStr}-${puntoStr}-${numeroFactura}`;
 
-    // Construir el nombre EXACTO que genera el JAR (con UTF-8)
-    const pdfFileNameBase = `${pdfTipoDocumento}_${pdfTimbrado}-${pdfEstablecimiento}-${pdfPunto}-${pdfNumero}`;
-    
-    // Buscar el PDF real en la carpeta
+    console.log('📄 Buscando PDF generado:', pdfFileNameBase);
+    console.log('   Timbrado:', timbrado, '| Est:', establecimientoStr, '| Punto:', puntoStr, '| Número:', numeroFactura);
+
+    // Buscar el PDF en la carpeta
     const files = fs.readdirSync(destFolder);
-    console.log('📂 Archivos en carpeta:', files.filter(f => f.endsWith('.pdf')));
-    console.log('🔍 Buscando:', pdfFileNameBase);
     
-    // Primero buscar coincidencia exacta
+    // Intentar múltiples patrones de búsqueda
     let pdfFile = files.find(f => f.endsWith('.pdf') && f.startsWith(pdfFileNameBase));
     
-    // Si no encuentra, buscar por timbrado y número
+    // Si no encuentra, intentar con encoding alternativo
     if (!pdfFile) {
-      pdfFile = files.find(f => 
-        f.endsWith('.pdf') && 
-        f.includes(pdfTimbrado) && 
-        f.includes(`-${pdfPunto}-${pdfNumero}.pdf`)
-      );
+      pdfFile = files.find(f => f.endsWith('.pdf') && f.startsWith(pdfFileNameBaseAlt));
     }
     
-    // Si todavía no encuentra, buscar cualquier PDF con el número de factura
+    // Si aún no encuentra, buscar por patrón flexible (timbrado y correlativo)
     if (!pdfFile) {
-      pdfFile = files.find(f => 
-        f.endsWith('.pdf') && 
-        f.includes(pdfNumero)
-      );
+      const pattern = new RegExp(`^Factura.*_${timbrado}-${establecimientoStr}-${puntoStr}-${numeroFactura}\\.pdf$`);
+      pdfFile = files.find(f => pattern.test(f));
     }
 
     if (pdfFile) {
       const pdfPath = path.join(destFolder, pdfFile);
       console.log(`✅ KUDE generado: ${pdfPath}`);
-      console.log(`   Nombre real: ${pdfFile}`);
       return pdfPath;
     } else {
-      console.warn('⚠️ Archivos en la carpeta:', files);
-      throw new Error(`PDF no encontrado. Buscaba: ${pdfFileNameBase}.pdf`);
+      console.warn('⚠️ Archivos en carpeta:', files.filter(f => f.endsWith('.pdf')));
+      throw new Error(`PDF no encontrado: ${pdfFileNameBase}.pdf`);
     }
 
   } catch (error) {
