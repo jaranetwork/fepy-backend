@@ -147,43 +147,12 @@ async function procesarFactura(datosFactura, empresaId, job = null) {
     await reportarProgreso(60);
 
     // ========================================
-    // 8. Enviar a SET (o mock)
+    // 8. GUARDAR XML INMEDIATAMENTE (ANTES DE ENVIAR A SET)
     // ========================================
-    console.log('📤 Enviando a SET...');
-    const idDocumento = crypto.randomBytes(16).toString('hex');
-    
-    const soapResponse = await setApi.recibe(
-      idDocumento,
-      xmlConQR,
-      ambiente,
-      rutaCertificado,
-      contrasena
-    );
-
-    console.log('📄 Respuesta SET recibida');
-    await reportarProgreso(75);
-
-    // ========================================
-    // 9. Extraer datos de respuesta
-    // ========================================
-    const codigoRetorno = extraerCodigoRetorno(soapResponse);
-    const mensajeRetorno = extraerMensajeRetorno(soapResponse);
-    const digestValue = extraerDigestValue(soapResponse);
-    const fechaProceso = extraerFechaProceso(soapResponse);
-    const estadoResultado = extraerEstadoResultado(soapResponse);
-    
-    const estadoSifen = determinarEstadoSegunCodigoRetorno(codigoRetorno, estadoResultado, mensajeRetorno);
-    
-    console.log(`📋 Código: ${codigoRetorno}, Estado: ${estadoSifen}`);
-    await reportarProgreso(80);
-
-    // ========================================
-    // 10. Guardar XML en filesystem
-    // ========================================
+    // CRÍTICO: Guardar el XML firmado ANTES de enviar a SET para no perderlo si falla la conexión
     const fecha = new Date();
     const anio = fecha.getFullYear();
     const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-    // Ruta: backend/de_output
     const rutaSalida = path.join(__dirname, `../de_output/${anio}/${mes}`);
 
     if (!fs.existsSync(rutaSalida)) {
@@ -192,12 +161,9 @@ async function procesarFactura(datosFactura, empresaId, job = null) {
 
     const correlativo = datosCompletos.encabezado?.idDoc?.correlativo ||
                        `${establecimiento}001${String(datosCompletos.numero || '0000001').padStart(7, '0')}`;
-    
-    // ========================================
-    // EXTRAER tipoDocumentoDescripcion DEL XML FIRMANDO PRIMERO
-    // (igual que server.js - antes de guardar el archivo)
-    // ========================================
-    let tipoDocumentoDescripcion = 'Factura';  // Default como server.js
+
+    // Extraer datos del XML para el nombre del archivo
+    let tipoDocumentoDescripcion = 'Factura';
     let serieDelXML = null;
 
     try {
@@ -215,27 +181,81 @@ async function procesarFactura(datosFactura, empresaId, job = null) {
       console.warn('⚠️ No se pudo extraer dDesTiDE del XML:', err.message);
     }
 
-    // ========================================
-    // CONSTRUIR NOMBRE CORRECTO DESDE EL PRINCIPIO
-    // ========================================
+    // Construir nombre del archivo
     const timbradoStr = datosCompletos.timbrado || datosCompletos.encabezado?.idDoc?.dNumTim || timbrado;
     const establecimientoStr = (datosCompletos.establecimiento?.toString() || datosCompletos.encabezado?.idDoc?.dEst?.toString() || establecimiento).padStart(3, '0');
     const puntoStr = (datosCompletos.punto?.toString() || datosCompletos.encabezado?.idDoc?.dPunExp?.toString() || puntoEmision).padStart(3, '0');
     const numeroStr = (datosCompletos.numero?.toString() || datosCompletos.encabezado?.idDoc?.numDoc?.toString() || '0000001').padStart(7, '0');
-    
+
     let nombreArchivo = `${tipoDocumentoDescripcion}_${timbradoStr}-${establecimientoStr}-${puntoStr}-${numeroStr}`;
     if (serieDelXML) {
       nombreArchivo += `-${serieDelXML}`;
     }
     nombreArchivo += '.xml';
-    
+
     const rutaArchivo = path.join(rutaSalida, nombreArchivo);
     fs.writeFileSync(rutaArchivo, xmlConQR);
 
-    const xmlPath = rutaArchivo;  // Ruta absoluta para KUDE
-    const xmlPathRelativo = `${anio}/${mes}/${nombreArchivo}`;  // Para BD
-    console.log(`📁 XML guardado: ${xmlPath}`);
-    await reportarProgreso(90);
+    const xmlPathRelativo = `${anio}/${mes}/${nombreArchivo}`;
+    console.log(`📁 XML guardado: ${rutaArchivo}`);
+    await reportarProgreso(70);
+
+    // ========================================
+    // 9. Enviar a SET (o mock) - AHORA EL XML YA ESTÁ GUARDADO
+    // ========================================
+    console.log('📤 Enviando a SET...');
+    const idDocumento = crypto.randomBytes(16).toString('hex');
+
+    let soapResponse = null;
+    let errorEnvio = null;
+
+    try {
+      soapResponse = await setApi.recibe(
+        idDocumento,
+        xmlConQR,
+        ambiente,
+        rutaCertificado,
+        contrasena
+      );
+      console.log('📄 Respuesta SET recibida');
+      await reportarProgreso(75);
+    } catch (setErr) {
+      // ⚠️ ERROR DE CONEXIÓN: No perder el XML ya generado
+      errorEnvio = setErr;
+      console.warn('⚠️ Error enviando a SET:', setErr.message);
+      console.warn('⚠️ El XML firmado ya está guardado en:', rutaArchivo);
+      
+      // Continuar con estado de error
+      soapResponse = null;
+    }
+
+    // ========================================
+    // 10. Extraer datos de respuesta (o usar valores por error)
+    // ========================================
+    let codigoRetorno = '0000';
+    let mensajeRetorno = null;
+    let digestValue = null;
+    let fechaProceso = null;
+    let estadoResultado = null;
+    let estadoSifen = 'enviado';
+
+    if (soapResponse) {
+      codigoRetorno = extraerCodigoRetorno(soapResponse);
+      mensajeRetorno = extraerMensajeRetorno(soapResponse);
+      digestValue = extraerDigestValue(soapResponse);
+      fechaProceso = extraerFechaProceso(soapResponse);
+      estadoResultado = extraerEstadoResultado(soapResponse);
+      estadoSifen = determinarEstadoSegunCodigoRetorno(codigoRetorno, estadoResultado, mensajeRetorno);
+      console.log(`📋 Código: ${codigoRetorno}, Estado: ${estadoSifen}`);
+    } else {
+      // Error de conexión: establecer estado de error
+      estadoSifen = 'error';
+      mensajeRetorno = errorEnvio?.message || 'Error de conexión con SET';
+      codigoRetorno = '9999';
+      console.log(`❌ Estado: ${estadoSifen} - ${mensajeRetorno}`);
+    }
+
+    await reportarProgreso(80);
 
     // ========================================
     // 11. Retornar resultado
