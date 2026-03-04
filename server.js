@@ -18,19 +18,23 @@ const mongoose = require('mongoose');
 // const qr = require('facturacionelectronicapy-qrgen').default;
 
 // MODO MOCK: Usar el servidor mock de la SET
-const setApi = require('../mock-set/setapi-mock').default;
+// NOTA: Esta línea fue reemplazada por el wrapper setapi-wrapper.js
+// const setApi = require('../mock-set/setapi-mock').default;
 
 // Configurar el mock (opcional, solo para debugging)
-if (process.env.MOCK_DEBUG === 'true') {
-  setApi.configure({ mockUrl: process.env.MOCK_SET_URL || 'http://localhost:8082', debug: true });
-}
+// if (process.env.MOCK_DEBUG === 'true') {
+//   setApi.configure({ mockUrl: process.env.MOCK_SET_URL || 'http://localhost:8082', debug: true });
+// }
 
 // Importar modelos
 const Invoice = require('./models/Invoice');
 const OperationLog = require('./models/OperationLog');
 
 // Importar utilitarios SIFEN
-const { determinarEstadoSegunCodigo, determinarEstadoVisual } = require('./utils/estadoSifen');
+const { determinarEstadoSegunCodigo, determinarEstadoVisual, extraerEstadoDocumento } = require('./utils/estadoSifen');
+
+// Importar wrapper de SET API (soporta Mock y Producción)
+const setApi = require('./services/setapi-wrapper');
 
 // Configurar Express
 const app = express();
@@ -46,17 +50,15 @@ const authController = require('./controllers/authController');
 const apiKeyController = require('./controllers/apiKeyController');
 const { verificarToken, verificarAdmin } = require('./middleware/auth');
 
-// Rutas de empresas
+// Rutas de empresas y facturación
 const empresaRoutes = require('./routes/empresas');
 const facturarRoutes = require('./routes/facturar');
-// const getEinvoiceRoute = require('./routes/get_einvoice');  // ← LEGACY: Usar /api/facturar/crear
 
 // Usar rutas
 app.use('/api/stats', statsRoutes);
 app.use('/api/invoices', invoiceRoutes);
 app.use('/api/empresas', empresaRoutes);
 app.use('/api/facturar', facturarRoutes);
-// app.use(getEinvoiceRoute);  // ← LEGACY: Deshabilitado, usar /api/facturar/crear
 
 // Rutas de autenticación (públicas)
 app.post('/api/auth/login', authController.login);
@@ -108,15 +110,6 @@ app.use((req, res, next) => {
 });
 
 // Las rutas se definen después de las funciones auxiliares (ver línea ~1300)
-
-// Ruta de ejemplo para probar el servidor
-app.get('/get_einvoice', (req, res) => {
-  res.json({
-    mensaje: 'Servidor de facturación electrónica activo',
-    endpoint: 'POST /get_einvoice',
-    descripcion: 'Envía un objeto JSON con los datos de la factura para generar un archivo XML de factura electrónica'
-  });
-});
 
 // Endpoint para consultar una factura específica por número de correlativo (requiere autenticación)
 app.get('/check_invoice/:numero', verificarToken, async (req, res) => {
@@ -204,7 +197,7 @@ app.get('/check_invoice/:numero', verificarToken, async (req, res) => {
   }
 });
 
-// Endpoint para consultar una factura por CDC (consulta en Mock SET a través del backend)
+// Endpoint para consultar una factura por CDC (consulta en SIFEN a través del backend)
 app.get('/api/invoices/cdc/:cdc', async (req, res) => {
   try {
     const cdc = req.params.cdc;
@@ -238,7 +231,7 @@ app.get('/api/invoices/cdc/:cdc', async (req, res) => {
       return;
     }
 
-    // Si no está en BD local, consultar al Mock SET (o SET real)
+    // Si no está en BD local, consultar a SIFEN
     try {
       const idConsulta = crypto.randomBytes(16).toString('hex');
       const ambiente = "test";
@@ -316,7 +309,7 @@ app.get('/api/ruc/:ruc', async (req, res) => {
       return;
     }
 
-    // Consultar al Mock SET (o SET real) a través del backend
+    // Consultar a SIFEN a través del backend
     try {
       const idConsulta = crypto.randomBytes(16).toString('hex');
       const ambiente = "test";
@@ -690,27 +683,47 @@ app.get('/api/invoices/estado/:cdc', async (req, res) => {
     let estadoSET = null;
 
     try {
-      // Consultar a la SET para ver el estado actual del documento
+      // Obtener configuración de la empresa
+      const Empresa = require('./models/Empresa');
+      const empresa = await Empresa.findById(invoiceRecord.empresaId);
+      
+      if (!empresa) {
+        console.log('⚠️ No se encontró la empresa, usando configuración por defecto');
+      }
+
       const idConsulta = crypto.randomBytes(16).toString('hex');
-      const ambiente = "test";
-      const certificateP12Path = path.join(__dirname, '../certificados', 'p12', 'certificado.p12');
-      const certificatePassword = '123456';
+      const ambiente = empresa?.configuracionSifen?.modo || 'test';
+      
+      // Obtener ruta y contraseña del certificado de la empresa
+      let certificateP12Path = path.join(__dirname, '../certificados', 'p12', 'certificado.p12');
+      let certificatePassword = '123456';
+      
+      if (empresa?.certificado?.nombreArchivo) {
+        const certificadoService = require('./services/certificadoService');
+        certificateP12Path = path.join(__dirname, '../certificados', 'p12', empresa.certificado.nombreArchivo);
+        certificatePassword = certificadoService.descifrarContrasena(empresa.certificado.contrasena);
+        console.log(`🔑 Usando certificado de la empresa: ${empresa.certificado.nombreArchivo}`);
+      } else {
+        console.log('⚠️ Empresa no tiene certificado configurado, usando certificado por defecto');
+      }
 
       const respuesta = await setApi.consulta(idConsulta, cdc, ambiente, certificateP12Path, certificatePassword);
 
-      // Extraer campos de la respuesta SOAP
-      const codigoRetornoMatch = respuesta.match(/<dCodRes>(.*?)<\/dCodRes>/);
-      const estadoMatch = respuesta.match(/<estado>(.*?)<\/estado>/);
-      
+      // Extraer campos de la respuesta SOAP (soporta formatos SIFEN v150 con namespace y genéricos)
+      const codigoRetornoMatch =
+        respuesta.match(/<ns2:dCodRes>(.*?)<\/ns2:dCodRes>/) ||
+        respuesta.match(/<dCodRes>(.*?)<\/dCodRes>/) ||
+        respuesta.match(/<codigoRetorno>(.*?)<\/codigoRetorno>/);
+
       let codigoRetorno = null;
       let estadoSET = null;
-      
+
       if (codigoRetornoMatch && codigoRetornoMatch[1]) {
         codigoRetorno = codigoRetornoMatch[1].trim();
       }
-      if (estadoMatch && estadoMatch[1]) {
-        estadoSET = estadoMatch[1].trim();
-      }
+
+      // Usar la función utilitaria para extraer el estado del documento
+      estadoSET = extraerEstadoDocumento(respuesta);
 
       console.log(`📥 Consulta SET - CDC: ${cdc}, dCodRes: ${codigoRetorno}, estado: ${estadoSET}`);
 
@@ -728,6 +741,10 @@ app.get('/api/invoices/estado/:cdc', async (req, res) => {
           } else if (estadoSET === 'Rechazado' || estadoSET === 'rechazado') {
             nuevoEstadoSifen = 'rechazado';
             nuevoEstadoVisual = 'rechazado';
+          } else if (estadoSET === 'Aprobado con observación' || estadoSET === 'observado') {
+            // Transmisión extemporánea (código 1005)
+            nuevoEstadoSifen = 'observado';
+            nuevoEstadoVisual = 'observado';
           } else {
             // Pendiente
             nuevoEstadoSifen = 'procesando';
@@ -868,13 +885,32 @@ app.post('/api/invoices/:id/refresh-status', async (req, res) => {
     }
     
     console.log(`📋 CDC encontrado: ${invoiceRecord.cdc}, Estado actual: ${invoiceRecord.estadoSifen}`);
-    
+
     // Consultar a la SET para obtener el estado actual
     try {
+      // Obtener configuración de la empresa
+      const Empresa = require('./models/Empresa');
+      const empresa = await Empresa.findById(invoiceRecord.empresaId);
+      
+      if (!empresa) {
+        console.log('⚠️ No se encontró la empresa, usando configuración por defecto');
+      }
+
       const idConsulta = crypto.randomBytes(16).toString('hex');
-      const ambiente = "test";
-      const certificateP12Path = path.join(__dirname, '../certificados', 'p12', 'certificado.p12');
-      const certificatePassword = '123456';
+      const ambiente = empresa?.configuracionSifen?.modo || 'test';
+      
+      // Obtener ruta y contraseña del certificado de la empresa
+      let certificateP12Path = path.join(__dirname, '../certificados', 'p12', 'certificado.p12');
+      let certificatePassword = '123456';
+      
+      if (empresa?.certificado?.nombreArchivo) {
+        const certificadoService = require('./services/certificadoService');
+        certificateP12Path = path.join(__dirname, '../certificados', 'p12', empresa.certificado.nombreArchivo);
+        certificatePassword = certificadoService.descifrarContrasena(empresa.certificado.contrasena);
+        console.log(`🔑 Usando certificado de la empresa: ${empresa.certificado.nombreArchivo}`);
+      } else {
+        console.log('⚠️ Empresa no tiene certificado configurado, usando certificado por defecto');
+      }
 
       console.log('📤 Enviando consulta a la SET...');
 
@@ -885,25 +921,31 @@ app.post('/api/invoices/:id/refresh-status', async (req, res) => {
 
       // Extraer campos de la respuesta SOAP según Manual Técnico v150
       // Estructura: <rProtDe><dCodRes>...</dCodRes><dEstRes>...</dEstRes><dMsgRes>...</dMsgRes>...</rProtDe>
-      // También soportamos los nombres genéricos que devuelve el mock-set
-      const codigoRetornoMatch = 
+      // También soportamos formatos con namespace ns2: y formatos genéricos
+      const codigoRetornoMatch =
+        respuesta.match(/<ns2:dCodRes>(.*?)<\/ns2:dCodRes>/) ||
         respuesta.match(/<dCodRes>(.*?)<\/dCodRes>/) ||
         respuesta.match(/<codigoRetorno>(.*?)<\/codigoRetorno>/);
-      
-      const estadoRetornoMatch = 
+
+      const estadoRetornoMatch =
+        respuesta.match(/<ns2:estado>(.*?)<\/ns2:estado>/) ||  // Primero buscar <estado> para consultas
+        respuesta.match(/<estado>(.*?)<\/estado>/) ||
+        respuesta.match(/<ns2:dEstRes>(.*?)<\/ns2:dEstRes>/) ||
         respuesta.match(/<dEstRes>(.*?)<\/dEstRes>/) ||
-        respuesta.match(/<estadoResultado>(.*?)<\/estadoResultado>/) ||
-        respuesta.match(/<estado>(.*?)<\/estado>/);
-      
-      const mensajeRetornoMatch = 
+        respuesta.match(/<estadoResultado>(.*?)<\/estadoResultado>/);
+
+      const mensajeRetornoMatch =
+        respuesta.match(/<ns2:dMsgRes>(.*?)<\/ns2:dMsgRes>/) ||
         respuesta.match(/<dMsgRes>(.*?)<\/dMsgRes>/) ||
         respuesta.match(/<mensajeRetorno>(.*?)<\/mensajeRetorno>/);
-      
-      const fechaProcesoMatch = 
+
+      const fechaProcesoMatch =
+        respuesta.match(/<ns2:dFecProc>(.*?)<\/ns2:dFecProc>/) ||
         respuesta.match(/<dFecProc>(.*?)<\/dFecProc>/) ||
         respuesta.match(/<fechaProceso>(.*?)<\/fechaProceso>/);
-      
-      const digestValueMatch = 
+
+      const digestValueMatch =
+        respuesta.match(/<ns2:dDigVal>(.*?)<\/ns2:dDigVal>/) ||
         respuesta.match(/<dDigVal>(.*?)<\/dDigVal>/) ||
         respuesta.match(/<digestValue>(.*?)<\/digestValue>/);
 
@@ -911,6 +953,7 @@ app.post('/api/invoices/:id/refresh-status', async (req, res) => {
       console.log('  codigoRetornoMatch:', codigoRetornoMatch);
       console.log('  estadoRetornoMatch:', estadoRetornoMatch);
       console.log('  mensajeRetornoMatch:', mensajeRetornoMatch);
+      console.log('  Respuesta SOAP (primeros 800 chars):', respuesta.substring(0, 800));
 
       let codigoRetorno = invoiceRecord.codigoRetorno;
       let estadoRetorno = invoiceRecord.respuestaSifen?.estado;
@@ -943,56 +986,56 @@ app.post('/api/invoices/:id/refresh-status', async (req, res) => {
         console.log('  DigestValue extraído:', digestValueResp);
       }
 
-      // Determinar estado visual según código de retorno y estado del documento
-      // Para consulta (consDE):
-      // - dCodRes 0421 = CDC encontrado (éxito de la consulta)
-      // - estado = Aprobado/Rechazado/Pendiente (estado real del documento)
+      // Determinar estado visual según código de retorno según Manual Técnico v150
       //
-      // Para recepción (siRecepDE):
+      // Para RECEPCIÓN (siRecepDE) - Sección 9.1.3:
       // - 0260 = Autorización satisfactoria (Aprobado) 🟢
       // - 1005 = Transmisión extemporánea (Observado) 🟠
-      // - 0000 = En procesamiento (Pendiente) 🟠
       // - 1000-1004 = Errores de validación (Rechazado) 🔴
       //
-      // NOTA: El estado "observado" solo se usa para código 1005.
-      // Para código 0000, el estado es "enviado" pero estadoVisual es "observado" (amber).
+      // Para CONSULTA (siConsDE) - Sección 12.3.4.3:
+      // - 0420 = CDC inexistente (Error - no encontrado en SET) 🔴
+      // - 0421 = CDC encontrado (Éxito de consulta) - estado real depende del documento 🟢
+      // - 0422 = CDC encontrado (alternativo)
+      //
+      // NOTA: El campo <estado> NO es parte del schema oficial (Schema XML 10).
+      // Para obtener el estado real cuando dCodRes=0421, debemos consultar el documento
+      // en el mock-set vía REST API.
+      //
+      // NOTA: El código 0000 NO es oficial. Se usaba anteriormente para "En procesamiento".
       let estadoVisual = 'rechazado';
       let estadoSifen = 'rechazado';
 
-      // Primero verificar si es una respuesta de recepción (tiene dEstRes o estadoResultado)
-      // vs una respuesta de consulta (tiene <estado> con Aprobado/Rechazado/Pendiente)
-      const esConsulta = estadoRetornoMatch &&
-        (estadoRetornoMatch[0].includes('<estado>') || estadoRetornoMatch[0].includes('<estadoResultado>'));
-
       if (codigoRetorno === '0260') {
-        // Recepción: Autorización satisfactoria
+        // Recepción: Autorización satisfactoria (DTE aprobado)
         estadoVisual = 'aceptado';
         estadoSifen = 'aceptado';
+        console.log('  ✅ Código 0260: Autorización satisfactoria');
       } else if (codigoRetorno === '1005') {
         // Recepción: Transmisión extemporánea - ÚNICO CASO donde estado = 'observado'
         estadoVisual = 'observado';
         estadoSifen = 'observado';
-      } else if (codigoRetorno === '0000') {
-        // Recepción: En procesamiento (pendiente de aprobación manual)
-        estadoVisual = 'observado';  // Amber
-        estadoSifen = 'enviado';
+        console.log('  ⚠️ Código 1005: Transmisión extemporánea');
+      } else if (['1000', '1001', '1002', '1003', '1004'].includes(codigoRetorno)) {
+        // Recepción: Errores de validación - Rechazado
+        estadoVisual = 'rechazado';
+        estadoSifen = 'rechazado';
+        console.log('  ❌ Código', codigoRetorno, ': Error de validación - Rechazado');
+      } else if (codigoRetorno === '0420') {
+        // Consulta: CDC inexistente - La factura no está en la SET
+        estadoVisual = 'error';
+        estadoSifen = 'error';
+        console.log('  ❌ Código 0420: CDC inexistente - Factura no encontrada en SET');
       } else if (codigoRetorno === '0421') {
-        // Consulta: CDC encontrado - el estado real está en <estado>
-        if (estadoRetorno === 'Aprobado' || estadoRetorno === 'aprobado') {
-          estadoVisual = 'aceptado';
-          estadoSifen = 'aceptado';
-        } else if (estadoRetorno === 'Rechazado' || estadoRetorno === 'rechazado') {
-          estadoVisual = 'rechazado';
-          estadoSifen = 'rechazado';
-        } else {
-          // Pendiente o cualquier otro valor
-          estadoVisual = 'observado';
-          estadoSifen = 'procesando';
-        }
-      } else if (['0', '2'].includes(codigoRetorno)) {
-        // Códigos legacy de éxito
+        // Consulta: RUC Certificado sin permiso - Error de autenticación
+        estadoVisual = 'rechazado';
+        estadoSifen = 'rechazado';
+        console.log('  ❌ Código 0421: RUC Certificado sin permiso para consultar');
+      } else if (codigoRetorno === '0422') {
+        // Consulta: CDC encontrado - Documento APROBADO
         estadoVisual = 'aceptado';
         estadoSifen = 'aceptado';
+        console.log('  ✅ Código 0422: CDC encontrado - Documento APROBADO');
       }
 
       console.log('  Estado visual:', estadoVisual, '(desde código:', codigoRetorno + ')');
@@ -1159,8 +1202,7 @@ const iniciarServidor = async () => {
   app.listen(PORT, () => {
     console.log(`🚀 Servidor de facturación electrónica iniciado en http://localhost:${PORT}`);
     console.log(`📋 Endpoints disponibles:`);
-    console.log(`   POST /get_einvoice - Genera factura (con cola asíncrona)`);
-    console.log(`   GET  /get_einvoice - Información del servidor`);
+    console.log(`   POST /api/facturar/crear - Genera factura electrónica (con cola asíncrona)`);
     console.log(`   GET  /api/stats - Estadísticas del sistema`);
     console.log(`   GET  /api/invoices - Lista de facturas`);
     console.log(`   GET  /api/factura/estado/:id - Estado de factura (cola)`);

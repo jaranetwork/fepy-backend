@@ -11,7 +11,10 @@ const FacturaElectronicaPY = require('facturacionelectronicapy-xmlgen').default;
 const xmlsign = require('facturacionelectronicapy-xmlsign').default;
 const kude = require('facturacionelectronicapy-kude').default;
 const qr = require('facturacionelectronicapy-qrgen').default;
-const setApi = require('../../mock-set/setapi-mock').default;
+
+// Importar wrapper de SET API (soporta Mock y Producción)
+const setApi = require('../services/setapi-wrapper');
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');

@@ -194,7 +194,8 @@ router.post('/:id/retry', async (req, res) => {
 
     // Enviar el XML a la SET para actualizar el estado
     try {
-      const setApi = require('../../mock-set/setapi-mock').default;
+      // Importar wrapper de SET API (soporta Mock y Producción)
+      const setApi = require('../services/setapi-wrapper');
       const idDocumento = 'retry-' + Date.now();
       const ambiente = process.env.AMBIENTE_SET || 'test';
 
@@ -225,9 +226,6 @@ router.post('/:id/retry', async (req, res) => {
         // Transmisión extemporánea - ÚNICO CASO donde estado = 'observado'
         nuevoEstado = 'observado';
         estadoVisual = 'observado';
-      } else if (codigoRetorno === '0000') {
-        nuevoEstado = 'enviado';  // En procesamiento
-        estadoVisual = 'observado';  // Amber
       } else if (['1000', '1001', '1002', '1003', '1004', '0420'].includes(codigoRetorno)) {
         nuevoEstado = 'rechazado';
         estadoVisual = 'rechazado';
@@ -235,6 +233,8 @@ router.post('/:id/retry', async (req, res) => {
         nuevoEstado = 'aceptado';  // Códigos legacy
         estadoVisual = 'aceptado';
       }
+
+      // NOTA: El código 0000 NO es oficial. Se usaba anteriormente para "enviado".
 
       // Actualizar factura con la respuesta
       invoice.estadoSifen = nuevoEstado;
