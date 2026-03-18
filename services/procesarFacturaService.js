@@ -445,19 +445,24 @@ async function generarKUDE(xmlPath, cdc, correlativo, fechaCreacion, datosFactur
       console.warn('⚠️ No se pudo extraer timbrado del XML:', err.message);
     }
     
-    // El correlativo puede venir en dos formatos:
-    // 1. Con guiones: 001-001-0000001
-    // 2. Sin guiones: 0010010000001
+    // Extraer establecimiento, punto y número DIRECTAMENTE de datosFactura
+    // para evitar inconsistencias entre el correlativo y los datos reales del JSON
     let establecimientoStr, puntoStr, numeroFactura;
-    
-    if (correlativo.includes('-')) {
-      // Formato con guiones: 001-001-0000001
+
+    if (datosFactura) {
+      // Intentar extraer de datosFactura.data (estructura ERPNext)
+      const datosData = datosFactura.data || datosFactura;
+      establecimientoStr = String(datosData.establecimiento || '001').padStart(3, '0');
+      puntoStr = String(datosData.punto || '001').padStart(3, '0');
+      numeroFactura = String(datosData.numero || correlativo.split('-')[2] || '0000001').padStart(7, '0');
+    } else if (correlativo.includes('-')) {
+      // Fallback: formato con guiones: 001-001-0000001
       const partes = correlativo.split('-');
       establecimientoStr = partes[0];
       puntoStr = partes[1];
       numeroFactura = partes[2];
     } else {
-      // Formato sin guiones: 0010010000001
+      // Fallback: formato sin guiones: 0010010000001
       establecimientoStr = correlativo.substring(0, 3);
       puntoStr = correlativo.substring(3, 6);
       numeroFactura = correlativo.substring(6);
@@ -514,8 +519,10 @@ async function generarKUDE(xmlPath, cdc, correlativo, fechaCreacion, datosFactur
 function completarDatosConEmpresa(datosFactura, empresa) {
   const datosCompletos = { ...datosFactura };
   const timbrado = empresa.configuracionSifen.timbrado || '12345678';
-  const establecimiento = '001';
-  const puntoEmision = '001';
+  
+  // Extraer establecimiento y punto del JSON, con fallback a '001'
+  const establecimiento = String(datosFactura.data?.establecimiento || datosFactura.establecimiento || '001').padStart(3, '0');
+  const puntoEmision = String(datosFactura.data?.punto || datosFactura.punto || '001').padStart(3, '0');
 
   // Agregar RUC de la empresa (importante para CDC)
   datosCompletos.ruc = empresa.ruc;  // Con guión para xmlgen
