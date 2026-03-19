@@ -314,8 +314,8 @@ exports.generarFactura = async (req, res) => {
     
     const nombreArchivo = `factura_${correlativo}.xml`;
     const rutaArchivo = path.join(rutaSalida, nombreArchivo);
-    fs.writeFileSync(rutaArchivo, xmlConQR);
-    
+    fs.writeFileSync(rutaArchivo, xmlConQR, 'utf8');
+
     invoice.xmlPath = `${anio}/${mes}/${nombreArchivo}`;
 
     await invoice.save();

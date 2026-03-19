@@ -274,7 +274,7 @@ async function procesarFactura(datosFactura, empresaId, job = null, invoiceId = 
     nombreArchivo += '.xml';
 
     const rutaArchivo = path.join(rutaSalida, nombreArchivo);
-    fs.writeFileSync(rutaArchivo, xmlConQR);
+    fs.writeFileSync(rutaArchivo, xmlConQR, 'utf8');
 
     const xmlPathRelativo = `${anio}/${mes}/${nombreArchivo}`;
     console.log(`📁 XML guardado: ${rutaArchivo}`);

@@ -81,7 +81,7 @@ app.delete('/api/api-keys/:id', verificarToken, apiKeyController.revocarApiKey);
 // Conectar a MongoDB
 const connectDB = async () => {
   try {
-    await mongoose.connect('mongodb://localhost:27017/sifen_db', {
+    await mongoose.connect('mongodb://127.0.0.1:27017/sifen_db', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });

@@ -18,7 +18,7 @@ module.exports = {
    * 
    * Por defecto: http://localhost:8082
    */
-  mockUrl: process.env.SIFEN_MOCK_URL || 'http://localhost:8082',
+  mockUrl: process.env.SIFEN_MOCK_URL || 'http://127.0.0.1:8082',
 
   /**
    * URL de producción para SET Real
