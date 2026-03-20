@@ -1,12 +1,32 @@
 /**
  * Script para parchar librerías de facturación electrónica
  * Ejecutar después de cada `npm install`
- * 
+ *
  * Uso: node patch-kude.js
  */
 
 const fs = require('fs');
 const path = require('path');
+
+// ========================================
+// PARCHE 0: Reemplazar CreateKude.jar (parche de normalización)
+// ========================================
+const kudeJarSource = path.join(__dirname, 'CreateKude.jar');
+const kudeJarDest = path.join(__dirname, 'node_modules/facturacionelectronicapy-kude/dist/CreateKude.jar');
+
+try {
+  if (fs.existsSync(kudeJarSource)) {
+    fs.copyFileSync(kudeJarSource, kudeJarDest);
+    console.log('✅ CreateKude.jar parcheado (normalización de nombres)');
+    console.log('   Origen:', kudeJarSource);
+    console.log('   Destino:', kudeJarDest);
+  } else {
+    console.warn('⚠️ No se encontró CreateKude.jar en la raíz del backend');
+    console.warn('   El JAR original se mantendrá sin cambios');
+  }
+} catch (error) {
+  console.error('❌ Error al parchar CreateKude.jar:', error.message);
+}
 
 // ========================================
 // PARCHE 1: facturacionelectronicapy-kude
