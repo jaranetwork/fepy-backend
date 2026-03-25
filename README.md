@@ -315,6 +315,11 @@ El sistema usa **API Keys** para autenticación:
 2. Incluir en headers: `Authorization: Bearer <API_KEY>`
 3. Las API Keys pueden estar asociadas a una empresa específica
 
+## Proyectos
+
+- [FEPY frontend](https://github.com/jaranetwork/fepy-frontend) Interface web
+- [Módulo ERPNext](https://github.com/jaranetwork/einvoice) para el envío de facturas a FEPY
+
 ## 📚 Recursos
 
 - [Manual Técnico SIFEN v150](https://www.set.gov.py)
